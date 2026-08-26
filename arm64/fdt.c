@@ -195,6 +195,7 @@ static int setup_fdt(struct kvm *kvm)
 			u64 pool_addr = kvm->arch.memory_guest_start + kvm->ram_size - pool_size;
 			u64 alloc_ranges[2] = { cpu_to_fdt64(pool_addr), cpu_to_fdt64(pool_size) };
 			_FDT(fdt_property(fdt, "alloc-ranges", alloc_ranges, sizeof(alloc_ranges)));
+			_FDT(fdt_property(fdt, "linux,swiotlb", NULL, 0));
 		}
 
 		resv_mem_prop = cpu_to_fdt64(pool_size);
