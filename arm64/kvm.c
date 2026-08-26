@@ -499,6 +499,13 @@ void kvm__arch_validate_cfg(struct kvm *kvm)
 		if (kvm->cfg.hugetlbfs_path)
 			die("guest_memfd cannot be backed by hugetlbfs");
 	}
+	if (kvm->cfg.arch.vfio_bounce_buffer_mb) {
+		u64 bounce_size = (u64)kvm->cfg.arch.vfio_bounce_buffer_mb << 20;
+		if (kvm->cfg.ram_size && kvm->cfg.ram_size <= bounce_size) {
+			die("RAM size (0x%llx) must be larger than VFIO bounce region (0x%llx)",
+			    kvm->cfg.ram_size, bounce_size);
+		}
+	}
 
 	if (kvm->cfg.arch.protected) {
 		if (kvm->cfg.ram_size &&
