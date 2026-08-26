@@ -367,7 +367,7 @@ ifeq (y,$(ARCH_WANT_LIBFDT))
 		LIBS_DYNOPT	+= -lfdt
 		LIBS_STATOPT	+= -lfdt
 	else
-                $(error No libfdt found. Please install libfdt-dev package or set LIBFDT_DIR)
+#                $(error No libfdt found. Please install libfdt-dev package or set LIBFDT_DIR)
 	endif
 endif
 

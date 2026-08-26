@@ -130,7 +130,7 @@ static int setup_fdt(struct kvm *kvm)
 					= kvm->cpus[0]->generate_fdt_nodes;
 
 	/* Generate DMA regions for bouncing in protected VMs */
-	emit_dma_regions = kvm->cfg.arch.protected;
+	emit_dma_regions = kvm->cfg.arch.protected || kvm->cfg.arch.vfio_bounce_buffer_mb;
 
 	/* Create new tree without a reserve map */
 	_FDT(fdt_create(fdt, FDT_MAX_SIZE));
@@ -180,6 +180,8 @@ static int setup_fdt(struct kvm *kvm)
 
 	/* Reserved memory (restricted DMA pool) */
 	if (emit_dma_regions) {
+		u64 pool_size = DMA_MEM_REGION_SIZE;
+
 		_FDT(fdt_begin_node(fdt, "reserved-memory"));
 		_FDT(fdt_property_cell(fdt, "#address-cells", 0x2));
 		_FDT(fdt_property_cell(fdt, "#size-cells", 0x2));
@@ -187,7 +189,15 @@ static int setup_fdt(struct kvm *kvm)
 
 		_FDT(fdt_begin_node(fdt, "restricted_dma_reserved"));
 		_FDT(fdt_property_string(fdt, "compatible", "restricted-dma-pool"));
-		resv_mem_prop = cpu_to_fdt64(DMA_MEM_REGION_SIZE);
+
+		if (kvm->cfg.arch.vfio_bounce_buffer_mb) {
+			pool_size = (u64)kvm->cfg.arch.vfio_bounce_buffer_mb << 20;
+			u64 pool_addr = kvm->arch.memory_guest_start + kvm->ram_size - pool_size;
+			u64 alloc_ranges[2] = { cpu_to_fdt64(pool_addr), cpu_to_fdt64(pool_size) };
+			_FDT(fdt_property(fdt, "alloc-ranges", alloc_ranges, sizeof(alloc_ranges)));
+		}
+
+		resv_mem_prop = cpu_to_fdt64(pool_size);
 		_FDT(fdt_property(fdt, "size", &resv_mem_prop, sizeof(resv_mem_prop)));
 		_FDT(fdt_property_cell(fdt, "phandle", PHANDLE_DMA));
 		_FDT(fdt_end_node(fdt));
