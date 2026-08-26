@@ -364,15 +364,47 @@ static int vfio_get_iommu_type(void)
 	return -ENODEV;
 }
 
+static int vfio_get_bounce_buffer_overlap(struct kvm *kvm, struct kvm_mem_bank *bank,
+					  u64 *overlap_start, u64 *overlap_size)
+{
+#ifdef CONFIG_ARM64
+	if (kvm->cfg.arch.vfio_bounce_buffer_mb) {
+		u64 pool_size = (u64)kvm->cfg.arch.vfio_bounce_buffer_mb << 20;
+		u64 pool_start = kvm->arch.memory_guest_start + kvm->ram_size - pool_size;
+		u64 pool_end   = pool_start + pool_size;
+		
+		u64 bank_start = bank->guest_phys_addr;
+		u64 bank_end   = bank_start + bank->size;
+		
+		*overlap_start = (bank_start > pool_start) ? bank_start : pool_start;
+		u64 end = (bank_end < pool_end) ? bank_end : pool_end;
+		
+		if (*overlap_start < end) {
+			*overlap_size = end - *overlap_start;
+			return 1;
+		}
+		return 0;
+	}
+#endif
+	*overlap_start = bank->guest_phys_addr;
+	*overlap_size  = bank->size;
+	return 1;
+}
+
 static int vfio_map_mem_bank(struct kvm *kvm, struct kvm_mem_bank *bank, void *data)
 {
 	int ret = 0;
+	u64 overlap_start, overlap_size;
+
+	if (!vfio_get_bounce_buffer_overlap(kvm, bank, &overlap_start, &overlap_size))
+		return 0;
+
 	struct vfio_iommu_type1_dma_map dma_map = {
 		.argsz	= sizeof(dma_map),
 		.flags	= VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE,
-		.vaddr	= (unsigned long)bank->host_addr,
-		.iova	= (u64)bank->guest_phys_addr,
-		.size	= bank->size,
+		.vaddr	= (unsigned long)bank->host_addr + (overlap_start - bank->guest_phys_addr),
+		.iova	= overlap_start,
+		.size	= overlap_size,
 	};
 
 	/* Map the guest memory for DMA (i.e. provide isolation) */
@@ -387,10 +419,15 @@ static int vfio_map_mem_bank(struct kvm *kvm, struct kvm_mem_bank *bank, void *d
 
 static int vfio_unmap_mem_bank(struct kvm *kvm, struct kvm_mem_bank *bank, void *data)
 {
+	u64 overlap_start, overlap_size;
+
+	if (!vfio_get_bounce_buffer_overlap(kvm, bank, &overlap_start, &overlap_size))
+		return 0;
+
 	struct vfio_iommu_type1_dma_unmap dma_unmap = {
-		.argsz = sizeof(dma_unmap),
-		.size = bank->size,
-		.iova = bank->guest_phys_addr,
+		.argsz	= sizeof(dma_unmap),
+		.iova	= overlap_start,
+		.size	= overlap_size,
 	};
 
 	ioctl(vfio_container, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
