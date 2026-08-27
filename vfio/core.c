@@ -370,7 +370,7 @@ static int vfio_get_bounce_buffer_overlap(struct kvm *kvm, struct kvm_mem_bank *
 #ifdef CONFIG_ARM64
 	if (kvm->cfg.arch.vfio_bounce_buffer_mb) {
 		u64 pool_size = (u64)kvm->cfg.arch.vfio_bounce_buffer_mb << 20;
-		u64 pool_start = kvm->arch.memory_guest_start + kvm->ram_size - pool_size;
+		u64 pool_start = kvm->arch.memory_guest_start + kvm->ram_size - pool_size - 0x200000;
 		u64 pool_end   = pool_start + pool_size;
 		
 		u64 bank_start = bank->guest_phys_addr;
